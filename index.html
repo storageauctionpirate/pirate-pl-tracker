@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pirate P&amp;L Tracker</title>
+<style>
+:root{--navy:#0b1a33;--navy2:#13284d;--gold:#d4a73a;--gold2:#f0cf73;--txt:#eef2f8;--mut:#9fb0c9;--red:#ff7b7b;--grn:#6fdc8c}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--navy);color:var(--txt);font-size:16px}
+header{background:var(--navy2);border-bottom:2px solid var(--gold);padding:12px 14px;position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px}
+header h1{font-size:19px;margin:0;color:var(--gold2);flex:1}main{padding:12px;max-width:760px;margin:auto}
+.card{background:var(--navy2);border:1px solid #23406f;border-radius:12px;padding:12px;margin-bottom:12px}
+h2{color:var(--gold2);font-size:17px;margin:4px 0 10px}h3{color:var(--gold);font-size:15px;margin:6px 0}
+button,.btn{background:var(--gold);color:var(--navy);border:0;border-radius:9px;padding:10px 13px;font-weight:700;font-size:15px;cursor:pointer}
+button.sec{background:transparent;color:var(--gold2);border:1px solid var(--gold)}button.del{background:transparent;color:var(--red);border:1px solid var(--red);padding:6px 9px;font-size:13px}
+input,select,textarea{width:100%;background:#0a1630;color:var(--txt);border:1px solid #2d4c7e;border-radius:8px;padding:10px;font-size:16px}
+label{display:block;font-size:13px;color:var(--mut);margin:6px 0 3px}.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:130px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}.stat{background:#0a1630;border-radius:9px;padding:9px}.stat b{display:block;font-size:18px;color:var(--gold2)}.stat span{font-size:12px;color:var(--mut)}
+.pos{color:var(--grn)!important}.neg{color:var(--red)!important}
+.proj{display:block;background:#0a1630;border-radius:10px;padding:10px;margin-bottom:8px;cursor:pointer;border-left:4px solid var(--gold)}
+.proj small{color:var(--mut)}.tag{font-size:11px;padding:2px 7px;border-radius:9px;background:#23406f;margin-left:6px}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid #23406f;text-align:left}td.n,th.n{text-align:right}
+.note{font-size:12px;color:var(--mut)}.foot{text-align:center;padding:16px;font-size:12px;color:var(--mut)}.gap>*{margin:4px 0}
+</style></head><body>
+<header><h1 id="ttl"></h1><button class="sec" id="homeBtn" onclick="go()">☰ All</button></header>
+<main id="app"></main>
+<div class="foot">⚓ Data is saved only in this browser (localStorage) — no server, no accounts. Back up with JSON export.<br>Not tax advice. Talk to a tax pro about your situation.</div>
+<script>
+const APP_NAME='Pirate P&L Tracker', BRAND='Storage Auction Pirate', KEY='piratePL.v1';
+const EXP_CATS=['Help/labor','Gas','Dump fees','Truck','Supplies','Storage rent','Other'];
+const PLATFORMS=['eBay','Whatnot','FB Marketplace','Yard sale','Other'];
+const TYPES=['Storage unit','Job','Other'];
+document.getElementById('ttl').textContent='🏴‍☠️ '+APP_NAME;document.title=APP_NAME;
+let db=load(), yearF='all';
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||{projects:[]}}catch(e){return{projects:[]}}}
+function save(){localStorage.setItem(KEY,JSON.stringify(db))}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const num=v=>Math.round((parseFloat(v)||0)*100)/100;
+const $=m=>'$'+(m<0?'-':'')+Math.abs(m).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today=()=>new Date().toISOString().slice(0,10);
+const opts=(a,s)=>a.map(x=>`<option${x===s?' selected':''}>${x}</option>`).join('');
+const isStorage=p=>p.type==='Storage unit';
+function calc(p){const base=isStorage(p)?num(p.price)+num(p.premium):0;const exp=p.expenses.reduce((a,e)=>a+num(e.amount),0);
+ const gross=p.sales.reduce((a,s)=>a+num(s.price),0);const sfees=p.sales.reduce((a,s)=>a+num(s.fees),0);
+ const income=isStorage(p)?0:num(p.income);const cost=num(base+exp+sfees);const sales=num(gross+income);const profit=num(sales-cost);
+ return{base,exp,gross,sfees,income,cost,sales,netSales:num(gross-sfees),profit,roi:cost?profit/cost*100:null}}
+const find=id=>db.projects.find(p=>p.id===id);
+function go(id){location.hash=id?'#p/'+id:'';render()}
+window.onhashchange=render;
+function render(){const m=location.hash.match(/^#p\/(.+)/);const p=m&&find(m[1]);p?renderProj(p):renderDash()}
+function years(){return[...new Set(db.projects.map(p=>(p.date||'').slice(0,4)).filter(Boolean))].sort().reverse()}
+function renderDash(){const ps=db.projects.filter(p=>yearF==='all'||(p.date||'').startsWith(yearF)).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+ let T={cost:0,sales:0,profit:0};ps.forEach(p=>{const c=calc(p);T.cost+=c.cost;T.sales+=c.sales;T.profit+=c.profit});
+ app.innerHTML=`<div class="card"><h2>Dashboard</h2><div class="row"><div><label>Year</label><select id="yf" onchange="yearF=this.value;render()"><option value="all">All years</option>${years().map(y=>`<option${y===yearF?' selected':''}>${y}</option>`).join('')}</select></div></div>
+ <div class="stats" style="margin-top:10px"><div class="stat"><span>Total spent</span><b id="tSpent">${$(T.cost)}</b></div><div class="stat"><span>Total sold / income</span><b id="tSold">${$(T.sales)}</b></div>
+ <div class="stat"><span>Net profit</span><b id="tProfit" class="${T.profit<0?'neg':'pos'}">${$(T.profit)}</b></div><div class="stat"><span>Projects</span><b>${ps.length}</b></div></div></div>
+ <div class="card"><h2>Projects</h2><button id="newBtn" onclick="newProj()">+ New project</button><div style="margin-top:10px">${ps.map(p=>{const c=calc(p);return`<div class="proj" onclick="go('${p.id}')"><b>${esc(p.name)}</b><span class="tag">${esc(p.type)}</span><span class="tag">${p.status==='sold'?'Sold out':'Open'}</span><br><small>${esc(p.date)} · ${esc(p.location)}</small><br>Profit <b class="${c.profit<0?'neg':'pos'}">${$(c.profit)}</b> · ROI ${c.roi==null?'—':c.roi.toFixed(1)+'%'}</div>`}).join('')||'<p class="note">No projects yet. Tap “New project” or load demo data.</p>'}</div></div>
+ <div class="card gap"><h2>Export &amp; backup</h2><button class="sec" onclick="dl('all-transactions.csv',allCSV())">All transactions CSV</button> <button class="sec" onclick="dl('quickbooks.csv',qbCSV())">QuickBooks-friendly CSV</button> <button class="sec" onclick="dl('pirate-pl-backup.json',JSON.stringify(db,null,1),'application/json')">JSON backup</button>
+ <label>Restore from JSON backup (replaces current data)</label><input type="file" accept=".json,application/json" onchange="restore(this)"><br><button class="sec" id="demoBtn" onclick="demo()">Load demo data</button> <button class="del" onclick="if(confirm('Erase ALL data in this browser?')){db={projects:[]};save();render()}">Erase all</button>
+ <p class="note">${BRAND} · built for storage unit buyers, works for any self-employed hustle.</p></div>`}
+function newProj(){const p={id:uid(),name:'New project',type:'Storage unit',date:today(),location:'',price:0,premium:0,income:0,status:'open',expenses:[],sales:[]};db.projects.push(p);save();go(p.id)}
+function upd(id,f,v){const p=find(id);p[f]=v;save();if(f==='type')render();else summary(p)}
+function renderProj(p){const st=isStorage(p);
+ app.innerHTML=`<div class="card"><h2>Project</h2>
+ <label>Name</label><input id="pName" value="${esc(p.name)}" oninput="upd('${p.id}','name',this.value)">
+ <div class="row"><div><label>Type</label><select id="pType" onchange="upd('${p.id}','type',this.value)">${opts(TYPES,p.type)}</select></div><div><label>Date</label><input type="date" value="${esc(p.date)}" onchange="upd('${p.id}','date',this.value)"></div></div>
+ <label>Location / facility</label><input value="${esc(p.location)}" oninput="upd('${p.id}','location',this.value)">
+ ${st?`<div class="row"><div><label>Purchase price</label><input id="pPrice" type="number" inputmode="decimal" step="0.01" value="${p.price}" oninput="upd('${p.id}','price',this.value)"></div><div><label>Buyer's premium / fees</label><input id="pPrem" type="number" inputmode="decimal" step="0.01" value="${p.premium}" oninput="upd('${p.id}','premium',this.value)"></div></div>`
+ :`<label>Job income</label><input id="pIncome" type="number" inputmode="decimal" step="0.01" value="${p.income}" oninput="upd('${p.id}','income',this.value)">`}
+ <label>Status</label><select onchange="upd('${p.id}','status',this.value)"><option value="open"${p.status!=='sold'?' selected':''}>Open</option><option value="sold"${p.status==='sold'?' selected':''}>Sold out / done</option></select></div>
+ <div class="card"><h2>Summary</h2><div id="sum"></div></div>
+ <div class="card"><h2>Expenses</h2><div class="row"><div><label>Date</label><input type="date" id="eDate" value="${today()}"></div><div><label>Category</label><select id="eCat">${opts(EXP_CATS)}</select></div></div>
+ <div class="row"><div><label>Amount</label><input id="eAmt" type="number" inputmode="decimal" step="0.01"></div><div><label>Note</label><input id="eNote"></div></div><button id="addExp" style="margin-top:8px" onclick="addExp('${p.id}')">+ Add expense</button>
+ <table style="margin-top:8px">${p.expenses.map((e,i)=>`<tr><td>${esc(e.date)}<br><small class="note">${esc(e.cat)}${e.note?' · '+esc(e.note):''}</small></td><td class="n">${$(num(e.amount))}</td><td class="n"><button class="del" onclick="delRow('${p.id}','expenses',${i})">✕</button></td></tr>`).join('')}</table></div>
+ <div class="card"><h2>Sales</h2><div class="row"><div><label>Date</label><input type="date" id="sDate" value="${today()}"></div><div><label>Platform</label><select id="sPlat">${opts(PLATFORMS)}</select></div></div>
+ <label>Item</label><input id="sItem"><div class="row"><div><label>Sale price</label><input id="sPrice" type="number" inputmode="decimal" step="0.01"></div><div><label>Fees + shipping</label><input id="sFees" type="number" inputmode="decimal" step="0.01"></div></div><button id="addSale" style="margin-top:8px" onclick="addSale('${p.id}')">+ Add sale</button>
+ <table style="margin-top:8px"><tr><th>Item</th><th class="n">Price</th><th class="n">Net</th><th></th></tr>${p.sales.map((s,i)=>`<tr><td>${esc(s.item)}<br><small class="note">${esc(s.date)} · ${esc(s.platform)}</small></td><td class="n">${$(num(s.price))}</td><td class="n">${$(num(s.price-s.fees))}</td><td class="n"><button class="del" onclick="delRow('${p.id}','sales',${i})">✕</button></td></tr>`).join('')}</table></div>
+ <div class="card gap"><button class="sec" onclick="dl(slug(p.name)+'.csv',projCSV(find('${p.id}')))">Export project CSV</button> <button class="del" onclick="if(confirm('Delete this project?')){db.projects=db.projects.filter(x=>x.id!=='${p.id}');save();go()}">Delete project</button></div>`;summary(p)}
+function slug(s){return(s||'project').toLowerCase().replace(/[^a-z0-9]+/g,'-')}
+function summary(p){const c=calc(p),el=document.getElementById('sum');if(!el)return;
+ el.innerHTML=`<div class="stats"><div class="stat"><span>Total cost</span><b id="sCost">${$(c.cost)}</b></div><div class="stat"><span>Total sales${isStorage(p)?'':' + income'}</span><b id="sSales">${$(c.sales)}</b></div>
+ <div class="stat"><span>Net profit</span><b id="sProfit" class="${c.profit<0?'neg':'pos'}">${$(c.profit)}</b></div><div class="stat"><span>ROI</span><b id="sRoi">${c.roi==null?'—':c.roi.toFixed(1)+'%'}</b></div></div>
+ <p class="note">Cost = ${isStorage(p)?'purchase + premium + ':''}expenses (${$(c.exp)}) + sale fees/shipping (${$(c.sfees)}). Status: ${p.status==='sold'?'Sold out':'Open'}.</p>`}
+function addExp(id){const a=num(eAmt.value);if(!a)return alert('Enter an amount');find(id).expenses.push({date:eDate.value,cat:eCat.value,amount:a,note:eNote.value});save();render()}
+function addSale(id){const a=num(sPrice.value);if(!sItem.value&&!a)return alert('Enter item and price');find(id).sales.push({date:sDate.value,item:sItem.value,platform:sPlat.value,price:a,fees:num(sFees.value)});save();render()}
+function delRow(id,k,i){if(confirm('Delete this entry?')){find(id)[k].splice(i,1);save();render()}}
+// transactions: income positive, expenses negative
+function txns(p){const t=[],pn=p.name;
+ if(isStorage(p)){if(num(p.price))t.push([p.date,'Cost of goods: Storage unit purchase','Unit purchase '+(p.location||''),-num(p.price),pn]);if(num(p.premium))t.push([p.date,"Cost of goods: Buyer's premium/fees",'Buyer premium',-num(p.premium),pn])}
+ else if(num(p.income))t.push([p.date,'Income: Job income',pn,num(p.income),pn]);
+ p.expenses.forEach(e=>t.push([e.date,'Expense: '+e.cat,e.note||e.cat,-num(e.amount),pn]));
+ p.sales.forEach(s=>{t.push([s.date,'Income: Sales - '+s.platform,s.item,num(s.price),pn]);if(num(s.fees))t.push([s.date,'Expense: Selling fees & shipping',s.platform+' fees: '+s.item,-num(s.fees),pn])});return t}
+const csvq=v=>{v=String(v??'');return/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+const toCSV=rows=>rows.map(r=>r.map(csvq).join(',')).join('\r\n')+'\r\n';
+const H=['Date','Account/Category','Description','Amount','Project'];
+function projCSV(p){return toCSV([H,...txns(p).sort((a,b)=>a[0].localeCompare(b[0]))])}
+function allCSV(){return toCSV([H,...db.projects.flatMap(txns).sort((a,b)=>(a[0]||'').localeCompare(b[0]||''))])}
+function qbCSV(){const mdy=d=>{const[y,m,dd]=(d||'').split('-');return y?`${m}/${dd}/${y}`:''};
+ return toCSV([['Date','Description','Amount','Category','Memo'],...db.projects.flatMap(txns).sort((a,b)=>(a[0]||'').localeCompare(b[0]||'')).map(t=>[mdy(t[0]),t[2],t[3].toFixed(2),t[1].replace(/^[^:]+: /,''),'Project: '+t[4]])])}
+function dl(name,text,type='text/csv'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
+function restore(inp){const f=inp.files[0];if(!f)return;f.text().then(t=>{const d=JSON.parse(t);if(!Array.isArray(d.projects))throw 0;if(confirm('Replace all current data with this backup?')){db=d;save();go()}}).catch(()=>alert('Not a valid backup file'))}
+function demo(){if(db.projects.length&&!confirm('Add demo projects to your data?'))return;
+ db.projects.push({id:uid(),name:'Unit B-112 (demo)',type:'Storage unit',date:'2026-09-05',location:'Public Storage, Fresno',price:450,premium:67.5,income:0,status:'open',
+  expenses:[{date:'2026-09-06',cat:'Help/labor',amount:80,note:'2 helpers'},{date:'2026-09-06',cat:'Dump fees',amount:45,note:''},{date:'2026-09-06',cat:'Gas',amount:32.5,note:''}],
+  sales:[{date:'2026-09-10',item:'DeWalt drill set',platform:'eBay',price:120,fees:18.6},{date:'2026-09-14',item:'Couch',platform:'FB Marketplace',price:250,fees:0},{date:'2026-09-20',item:'Box of comics',platform:'Whatnot',price:340,fees:42.2}]},
+ {id:uid(),name:'Garage cleanout (demo)',type:'Job',date:'2025-11-02',location:'Clovis',price:0,premium:0,income:600,status:'sold',
+  expenses:[{date:'2025-11-02',cat:'Truck',amount:95,note:'U-Haul'},{date:'2025-11-02',cat:'Dump fees',amount:60,note:''}],sales:[{date:'2025-11-09',item:'Scrap metal',platform:'Other',price:85,fees:0}]});save();render()}
+render();
+</script></body></html>
